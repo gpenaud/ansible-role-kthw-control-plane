@@ -1,0 +1,156 @@
+
+# ------------------------------------------------------------------------------
+# kubernetes binaries and certificates
+# ------------------------------------------------------------------------------
+
+- name: create control plane necessary directories
+  become: yes
+  file:
+    path: "{{ directory }}"
+    state: directory
+  loop:
+    - /etc/kubernetes/config
+    - /var/lib/kubernetes
+  loop_control:
+    loop_var: directory
+
+- name: download control plane binaries
+  become: yes
+  get_url:
+    url: "{{ binary }}"
+    dest: /usr/local/bin
+    mode: 0740
+  loop:
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-apiserver
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-controller-manager
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-scheduler
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubectl
+  loop_control:
+    loop_var: binary
+
+- name: copy certificates to kubernetes directory
+  copy:
+    src: "{{ file.name }}"
+    dest: /var/lib/kubernetes
+    mode: "{{ file.mode }}"
+    remote_src: yes
+  loop:
+    - name: ca.pem
+      mode: 644
+    - name: kubernetes.pem
+      mode: 644
+    - name: service-account.pem
+      mode: 644
+    - name: encryption-config.yaml
+      mode: 644
+    - name: ca-key.pem
+      mode: 600
+    - name: kubernetes-key.pem
+      mode: 600
+    - name: service-account-key.pem
+      mode: 600
+  loop_control:
+    loop_var: file
+
+# ------------------------------------------------------------------------------
+# configure kube-apiserver daemon
+# ------------------------------------------------------------------------------
+
+- name: templates out kube-apiserver systemd daemon file
+  become: yes
+  template:
+    src: kube-apiserver.service.j2
+    dest: /etc/systemd/system/kube-apiserver.service
+
+- name: start, enable and reload etcd systemd service
+  systemd:
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+    name: kube-apiserver
+
+# ------------------------------------------------------------------------------
+# configure kube-controller-manager daemon
+# ------------------------------------------------------------------------------
+
+- name: copy kube-controller-manager kubeconfig
+  copy:
+    src: kube-controller-manager.kubeconfig
+    dest: /var/lib/kubernetes
+    remote_src: yes
+
+- name: templates out kube-controller-manager systemd daemon file
+  become: yes
+  template:
+    src: kube-controller-manager.service.j2
+    dest: /etc/systemd/system/kube-controller-manager.service
+
+- name: start, enable and reload kube-controller-manager systemd service
+  systemd:
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+    name: kube-controller-manager
+
+# ------------------------------------------------------------------------------
+# configure kube-scheduler daemon
+# ------------------------------------------------------------------------------
+
+- name: copy kube-scheduler kubeconfig
+  copy:
+    src: kube-scheduler.kubeconfig
+    dest: /var/lib/kubernetes
+    remote_src: yes
+
+- name: templates out kube-scheduler systemd daemon file and configuration
+  become: yes
+  template:
+    src: "{{ file.src }}"
+    dest:  "{{ file.dest }}"
+  loop:
+    - src: kube-scheduler.yaml.j2
+      dest: /etc/kubernetes/config/kube-scheduler.yaml
+    - src: kube-scheduler.service.j2
+      dest: /etc/systemd/system/kube-scheduler.service
+  loop_control:
+    loop_var: file
+
+- name: start, enable and reload kube-scheduler systemd service
+  systemd:
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+    name: kube-scheduler
+
+# ------------------------------------------------------------------------------
+# install and configure http healthchecks
+# ------------------------------------------------------------------------------
+
+- name: install nginx server
+  package:
+    name: nginx
+    update_cache: yes
+  tags: develop
+
+- name: templates out nginx healkthcheck reverse-proxy
+  become: yes
+  template:
+    src: kubernetes.default.svc.cluster.local.j2
+    dest: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+  tags: develop
+
+- name: create symbolic link to activate nginx healthcheck
+  file:
+    state: link
+    src: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+    dest: /etc/nginx/sites-enabled/kubernetes.default.svc.cluster.local
+    force: yes
+  tags: develop
+
+- name: start, enable and reload nginx service
+  systemd:
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+    name: nginx
+  tags: develop
