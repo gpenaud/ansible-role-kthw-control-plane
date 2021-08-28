@@ -130,14 +130,11 @@
   package:
     name: nginx
     update_cache: yes
-  tags: develop
 
 - name: templates out nginx healkthcheck reverse-proxy
-  become: yes
   template:
     src: kubernetes.default.svc.cluster.local.j2
     dest: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
-  tags: develop
 
 - name: create symbolic link to activate nginx healthcheck
   file:
@@ -145,7 +142,6 @@
     src: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
     dest: /etc/nginx/sites-enabled/kubernetes.default.svc.cluster.local
     force: yes
-  tags: develop
 
 - name: start, enable and reload nginx service
   systemd:
@@ -153,4 +149,33 @@
     enabled: yes
     daemon_reload: yes
     name: nginx
+
+# ------------------------------------------------------------------------------
+# configure cluster roles and cluster role bindings
+# ------------------------------------------------------------------------------
+
+- name: install pip3 package
+  package:
+    update_cache: yes
+    name: python3-pip
+
+- name: install openshift dependency to use k8s ansible module
+  pip:
+    name: openshift
+
+- name: copy kubernetes resources files to masters
+  copy:
+    src: "files/{{ file }}"
+    dest: /root
+  loop:
+    - cluster-role-binding-to-kubernetes-user.yml
+    - kube-apiserver-to-kubelet-clusterrole.yml
+  loop_control:
+    loop_var: file
+  tags: develop
+
+- name: create kubernetes resources files to masters
+  shell: |-
+    kubectl apply --kubeconfig admin.kubeconfig -f kube-apiserver-to-kubelet-clusterrole.yml
+    kubectl apply --kubeconfig admin.kubeconfig -f cluster-role-binding-to-kubernetes-user.yml
   tags: develop
