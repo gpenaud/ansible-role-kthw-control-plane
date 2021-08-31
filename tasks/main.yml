@@ -21,10 +21,10 @@
     dest: /usr/local/bin
     mode: 0740
   loop:
-    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-apiserver
-    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-controller-manager
-    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-scheduler
-    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubectl
+    - https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/amd64/kube-apiserver
+    - https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/amd64/kube-controller-manager
+    - https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/amd64/kube-scheduler
+    - https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/amd64/kubectl
   loop_control:
     loop_var: binary
 
@@ -153,15 +153,6 @@
 # ------------------------------------------------------------------------------
 # configure cluster roles and cluster role bindings
 # ------------------------------------------------------------------------------
-
-- name: install pip3 package
-  package:
-    update_cache: yes
-    name: python3-pip
-
-- name: install openshift dependency to use k8s ansible module
-  pip:
-    name: openshift
 
 - name: copy kubernetes resources files to masters
   copy:
